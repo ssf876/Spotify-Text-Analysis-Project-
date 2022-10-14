@@ -1,0 +1,380 @@
+---
+title: "Final Code Sentiment Analysis"
+author: Michael Latimer, Angela Adamaris Gutierrez Castillo, Ojashvee Gupta, Marlon
+  Brooks, Shanice Sinclair, Angela
+date: "4/11/2022"
+output: html_document
+---
+## Preparation
+```{r setup, include=FALSE}
+setwd("C:/Users/13056/Desktop/Columbia University/APAN 5205 Frameworks & Methods II/Group Project")
+
+data <- read.csv("Spotify_Master_US_Data_Cleaned.csv", stringsAsFactors = FALSE)
+
+knitr::opts_chunk$set(echo = TRUE)
+library(stringr)
+library(dplyr)
+#install.packages("tidytext")
+library(tidytext)
+#install.packages("magrittr")
+library(magrittr)
+library(ggplot2)
+#install.packages("lexicon")
+library(lexicon)
+#install.packages("textdata")
+library(textdata)
+library(ggthemes)
+library(vader)
+library(schrute)
+library(syuzhet)
+
+```
+
+# View Total Number of Positive and Negative Words in song Lyrics with Bing Lexicon
+
+```{r}
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = CleanText)%>%
+  inner_join(get_sentiments('bing'))%>%
+  group_by(sentiment)%>%
+  count()
+```
+
+
+
+## Preparing Sentiment Analysis with NRC Lexicon
+
+```{r}
+nrc = get_sentiments('nrc')
+
+nrc = read.table(file = 'https://raw.githubusercontent.com/pseudorational/data/master/nrc_lexicon.txt',
+                 header = F,
+                 col.names = c('word','sentiment','num'),
+                 sep = '\t',
+                 stringsAsFactors = F)
+nrc = nrc[nrc$num!=0,]
+nrc$num = NULL
+
+```
+
+## Exploring Various Emotions in NRC Lexicon
+
+
+```{r, echo=FALSE}
+nrc%>%
+  group_by(sentiment)%>%
+  count()
+
+table(nrc$sentiment)
+```
+
+# Viewing Emotions in Lyrics based on NRC Lexicon
+
+```{r}
+library(dplyr)
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = CleanText)%>%
+  inner_join(nrc)%>%
+  group_by(sentiment)%>%
+  count()%>%
+  arrange(desc(n))
+```
+
+## Visualizing Emotions in Lyrics based on NRC Lexicon
+
+```{r}
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = CleanText)%>%
+  inner_join(nrc)%>%
+  group_by(sentiment)%>%
+  count()%>%
+  ggplot(aes(x=reorder(sentiment,X = n), y=n, fill=sentiment))+
+  xlab("Sentiment")+
+  ylab("Word Count") +
+  geom_col()+
+  guides(fill=F)+
+  coord_flip()+
+  ggtitle("Emotions in Lyrics")+
+  theme_bw()
+```
+
+
+## Preparing Sentiment Analysis with AFINN Lexicon
+
+```{r}
+afinn = get_sentiments('afinn')
+
+afinn = read.table('https://raw.githubusercontent.com/pseudorational/data/master/AFINN-111.txt',
+                   header = F,
+                   quote="",
+                   sep = '\t',
+                   col.names = c('word','value'), 
+                   encoding='UTF-8',
+                   stringsAsFactors = F)
+
+afinn[1:50,]
+
+
+```
+
+# Visualizing Distribution of AFINN Lexicon
+
+```{r}
+afinn %>%
+  group_by(value)%>%
+  count()
+```
+
+## Summary Statistics of Sentiment Analysis using AFINN Lexicon
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(afinn)%>%
+  summarize(reviewSentiment = mean(value))%>%
+  ungroup()%>%
+  summarize(min=min(reviewSentiment),
+            max=max(reviewSentiment),
+            median=median(reviewSentiment),
+            mean=mean(reviewSentiment))
+```
+
+# Viewing Sentiment of Song 52
+
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(afinn)%>%
+  filter(ID==52)%>%
+  summarize(reviewSentiment = mean(value))
+```
+
+# Visualizing Sentiment with AFINN
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(afinn)%>%
+  summarize(reviewSentiment = mean(value))%>%
+  ungroup()%>%
+  ggplot(aes(x=reviewSentiment,fill=reviewSentiment>0))+
+  geom_histogram(binwidth = 0.05)+
+  scale_x_continuous(breaks=seq(-5,5,1))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)+
+  ggtitle("Sentiment Distribution")+
+  ylim(0,15)+
+  xlab("Sentiment") +
+  ylab("Song Count") +
+  theme_bw()
+```
+
+# Analyzing Text with Jocker Lexicon
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(key_sentiment_jockers)%>%
+  summarize(reviewSentiment = mean(value))%>%
+  ungroup()%>%
+  summarize(min=min(reviewSentiment),max=max(reviewSentiment),median=median(reviewSentiment),mean=mean(reviewSentiment))
+
+```
+# Visualizing Sentiment Distribution with Jocker Lexicon 
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(key_sentiment_jockers)%>%
+  summarize(reviewSentiment = mean(value))%>%
+  ungroup()%>%
+  ggplot(aes(x=reviewSentiment,fill=reviewSentiment>0))+
+  geom_histogram(binwidth = 0.02)+
+  scale_x_continuous(breaks=seq(-1,1,0.2))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)+
+  theme_wsj()
+```
+
+
+# Sentiment Analysis with Senticnet Lexicon
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(hash_sentiment_senticnet, by = c('word'='x'))%>%
+  summarize(reviewSentiment = mean(y))%>%
+  ungroup()%>%
+  summarize(min=min(reviewSentiment),max=max(reviewSentiment),median=median(reviewSentiment),mean=mean(reviewSentiment))
+```
+
+
+# Visualizing Sentiment Distribution with Senticnet Lexicon
+
+```{r}
+data %>%
+  select(ID,CleanText)%>%
+  group_by(ID)%>%
+  unnest_tokens(output=word,input=CleanText)%>%
+  inner_join(hash_sentiment_senticnet, by = c('word'='x'))%>%
+  summarize(reviewSentiment = mean(y))%>%
+  ungroup()%>%
+  ggplot(aes(x=reviewSentiment,fill=reviewSentiment>0))+
+  geom_histogram(binwidth = 0.01)+
+  scale_x_continuous(breaks=seq(-1,1,0.2))+
+  scale_fill_manual(values=c('tomato','seagreen'))+
+  guides(fill=F)+
+  theme_wsj()
+```
+
+# Sentiment Analysis with Syuzhet
+
+```{r}
+data$text <- get_sentiment(data$CleanText)
+data %>% 
+  group_by(ID) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% head(n=40) %>% 
+  arrange(desc(sent))
+```
+
+# Sentiment with Syuzhet Grouped by Artist
+
+```{r}
+data %>% 
+  group_by(Artist) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% head(n=40) %>% 
+  arrange(desc(sent))
+```
+## Szuyhet with AFINN Lexicon
+
+```{r}
+data$text <- get_sentiment(data$CleanText,method = "afinn")
+data %>% 
+  group_by(ID) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% head(n=40) %>% 
+  arrange(desc(sent))
+```
+
+# Syuzhet Sentiment grouped by Artist
+
+```{r}
+data$text <- get_sentiment(data$CleanText,method = "afinn")
+data %>% 
+  group_by(Artist) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% head(n=40) %>% 
+  arrange(desc(sent))
+```
+
+# Syuzhet Sentiment Grouped By Year
+```{r}
+data$text <- get_sentiment(data$CleanText,method = "afinn")
+data %>% 
+  group_by(Year) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% head(n=40) %>% 
+  arrange(desc(sent))
+```
+
+# Visualizing Syuzhet Sentiment
+
+```{r}
+data$text <- get_sentiment(data$CleanText, method = "afinn")
+data %>% 
+  group_by(ID) %>% 
+  summarise(sent=mean(text), n=n()) %>% 
+  arrange(desc(n)) %>% 
+  arrange(desc(sent))%>%
+  ggplot(aes(x=sent,fill=sent>0))+
+  geom_histogram(binwidth = 0.8)+
+  scale_x_continuous(breaks=seq(-30,30,5))+
+  scale_fill_manual(values=c('tomato2','darkolivegreen3'))+
+  guides(fill=F)+
+  ggtitle("Syuzhet Sentiment Distribution")+
+  ylim(0,8)+
+  theme_wsj()+
+  theme(text=element_text(hjust = 3, size=7))
+```
+
+
+```{r}
+cor.test(data$text,data$Position)
+```
+
+```{r}
+cor.test(data$text,data$Streams)
+```
+
+# Creating Bigram
+
+```{r}
+bigrams_data <- data %>%
+  unnest_tokens(bigram, CleanText, token = "ngrams", n = 2)
+
+bigrams_data %>%
+  count(bigram, sort = TRUE)
+```
+
+#Filtering bigrams to remove stopwords
+
+```{r}
+bigrams_seperated <- bigrams_data %>%
+  separate(bigram, into = c("word1", "word2"), sep = " ")
+
+
+bigrams_united <- bigrams_seperated %>%
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word) %>%
+  unite(bigram, c(word1, word2), sep = " ")
+
+bigrams_united %>% count(bigram, sort = TRUE)
+```
+#Visualizing a network of bigrams
+
+```{r}
+bigram_counts <- bigrams_seperated %>% 
+  filter(!word1 %in% stop_words$word,
+         !word2 %in% stop_words$word) %>% 
+  count(word1, word2, sort = TRUE)
+```
+
+
+```{r}
+bigram_graph <- bigram_counts %>% 
+  filter(n > 10) %>%
+  as_tbl_graph()
+
+bigram_graph
+```
+
+#Note how tidygraph handles network data, the main tbl_graph object splits a network into two data frames: Node data and Edge data
+
+```{r}
+arrow <- grid::arrow(type = "closed", length = unit(.15, "inches"))
+
+ggraph(bigram_graph, layout = "fr") + 
+  geom_edge_link(aes(alpha = n), show.legend = F, 
+                 arrow = arrow, end_cap = circle(0.07, "inches")) + 
+  geom_node_point(color = "lightblue", size = 5) + 
+  geom_node_text(aes(label = name), vjust = 1, hjust = 1)
+```
+

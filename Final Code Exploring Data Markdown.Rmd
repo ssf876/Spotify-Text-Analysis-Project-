@@ -1,0 +1,237 @@
+---
+title: "Final Code Exploring Data"
+author: "Michael Latimer, Angela Adamaris Gutierrez Castillo, Ojashvee Gupta, Marlon Brooks, Shanice Sinclair"
+date: "3/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# Read in Cleaned Data 
+data <- read.csv("Spotify_Master_US_Data_Cleaned.csv", stringsAsFactors = F)
+library(stringr)
+library(dplyr)
+#install.packages("tidytext")
+library(tidytext)
+#install.packages("magrittr")
+library(magrittr)
+library(ggplot2)
+#install.packages("lexicon")
+library(lexicon)
+library(textdata)
+
+# Update Name of Column one
+colnames(data)[1] <- "ID"
+
+str(data)
+
+```
+
+## Summary of Characters
+
+```{r}
+summary(nchar(data$Lyrics))
+```
+
+## Summary Number of Words
+
+```{r}
+
+summary(str_count(string = data$Lyrics,pattern = '\\S+'))
+```
+
+# Summary - Percentage of Characters that are Exclamation Points
+
+```{r}
+
+percentExclamation = 100*str_count(data$Lyrics, pattern = '!')/nchar(data$Lyrics)
+summary(percentExclamation)
+
+```
+
+# Inspecting Shortest Song
+
+```{r, include=FALSE}
+
+shortest_song_index <- which.min(str_count(string = data$Lyrics,pattern = '\\S+'))
+
+data$Lyrics[shortest_song_index]
+```
+
+
+# Inspect Longest Song
+
+```{r, include=FALSE}
+longest_song_index <- which.max(str_count(string = data$Lyrics,pattern = '\\S+'))
+
+data$Lyrics[longest_song_index]
+
+```
+
+# Explore Correlations between Song length and Spotify Position
+
+```{r,echo=FALSE}
+character_correlation <- cor.test(nchar(data$Lyrics),data$Position)
+
+word_correlation <- cor.test(str_count(string = data$Lyrics,pattern = '\\S+'),data$Position)
+
+correlations <- data.frame(corr = c(character_correlation$estimate, word_correlation$estimate),p_value=c(character_correlation$p.value, word_correlation$p.value))
+
+rownames(correlations) = c('Characters','Words')
+correlations
+```
+
+# Explore Correlations between song length and Spotify Streams
+
+```{r,echo=FALSE}
+character_correlation_streams <- cor.test(nchar(data$Lyrics),data$Streams)
+
+word_correlation_streams <- cor.test(str_count(string = data$Lyrics,pattern = '\\S+'),data$Position)
+
+correlations_streams <- data.frame(corr = c(character_correlation_streams$estimate, word_correlation_streams$estimate),p_value=c(character_correlation_streams$p.value, word_correlation_streams$p.value))
+
+rownames(correlations_streams) = c('Characters','Words')
+correlations_streams
+```
+
+
+# What percent of songs mention guns?
+
+```{r}
+mean(str_detect(string = tolower(data$Lyrics),pattern = 'gun|guns')) * 100
+
+```
+
+# What percent of songs mention love?
+
+```{r}
+
+mean(str_detect(string = tolower(data$Lyrics),pattern = 'love')) *100
+
+```
+
+# Explore Most Common Words Before Removing Stopwords
+
+```{r}
+data%>%
+  unnest_tokens(input = Lyrics, output = word)%>%
+  select(word)%>%
+  group_by(word)%>%
+  summarize(count = n())%>%
+  ungroup()%>%
+  arrange(desc(count))%>%
+  top_n(10)
+```
+
+
+# Visualize Top Words after removing stop words
+
+```{r, echo=FALSE}
+data%>%
+  unnest_tokens(input = Lyrics, output = word)%>%
+  select(word)%>%
+  anti_join(stop_words)%>%
+  group_by(word)%>%
+  summarize(count = n())%>%
+  ungroup()%>%
+  arrange(desc(count))%>%
+  top_n(15)%>%
+  ggplot(aes(x=reorder(word,count), y=count, fill=count))+
+  geom_col()+
+  ggtitle("Top Words After Removing Stop Words")+
+  xlab('Words')+
+  ylab('Count')+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.background = element_rect(fill = "#f1f2ed"))+
+  coord_flip()
+```
+
+# Visualize Top Words After Removing Stop Words and Profanity
+
+```{r, echo=FALSE}
+
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = Lyrics)%>%
+  ungroup()%>%
+  select(ID, word)%>%
+  anti_join(stop_words)%>%
+  anti_join(data.frame(word = c(profanity_banned, profanity_racist)), 
+            by = c('word'='word')) %>%
+  group_by(word)%>%
+  summarize(count = n())%>%
+  ungroup()%>%
+  arrange(desc(count))%>%
+  top_n(15)%>%
+  ggplot(aes(x=reorder(word,count), y=count, fill=count))+
+  geom_col()+
+  ggtitle("Top Words After Removing Stop Words and Profanity")+
+  xlab('Words')+
+  ylab("Count") +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.background = element_rect(fill = "#f1f2ed"))+
+  coord_flip()
+```
+
+
+# Visualize Distribution of Word Count 
+
+```{r, echo=FALSE}
+
+data %>%
+  select(ID,Lyrics)%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word,input=Lyrics)%>%
+  ungroup()%>%
+  group_by(ID)%>%
+  summarize(count = n())%>%
+  ggplot(aes(x=count))+geom_histogram(color = 'black', fill = 'lightblue', bins = 40)+ xlab('Number of Words') + ylab("Count") + xlim(0,1100) + ggtitle("Distribution of Word Count") +
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.background = element_rect(fill = "#f1f2ed"))
+
+```
+
+# View Total Number of Positive and Negative Words in song Lyrics with Bing Lexicon
+
+```{r}
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = Lyrics)%>%
+  inner_join(get_sentiments('bing'))%>%
+  group_by(sentiment)%>%
+  count()
+```
+
+
+# Visualize Other Emotions in Lyrics
+
+```{r,echo=FALSE}
+nrc = get_sentiments('nrc')
+
+nrc = read.table(file = 'https://raw.githubusercontent.com/pseudorational/data/master/nrc_lexicon.txt',
+                 header = F,
+                 col.names = c('word','sentiment','num'),
+                 sep = '\t',
+                 stringsAsFactors = F)
+nrc = nrc[nrc$num!=0,]
+nrc$num = NULL
+
+data%>%
+  group_by(ID)%>%
+  unnest_tokens(output = word, input = Lyrics)%>%
+  inner_join(nrc)%>%
+  group_by(sentiment)%>%
+  count()%>%
+  ggplot(aes(x=reorder(sentiment,X = n), y=n, fill=sentiment))+
+  geom_col()+
+  guides(fill=F)+
+  coord_flip()+
+  ggtitle("Emotions in Lyrics")+
+  ylab("Word Count") + 
+  xlab(element_blank())+
+  theme(plot.title = element_text(hjust = 0.5))+
+  theme(plot.background = element_rect(fill = "#f1f2ed"))
+
+```
+

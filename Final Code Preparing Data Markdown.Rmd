@@ -1,0 +1,153 @@
+---
+title: "Final Code Preparing Data"
+author: "Michael Latimer, Angela Adamaris Gutierrez Castillo, Ojashvee Gupta, Marlon Brooks, Shanice Sinclair"
+date: "3/3/2022"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+data <- read.csv("Spotify_Master_US_Data.csv", stringsAsFactors = F)
+library(tm)
+library(SnowballC)
+library(tidyr)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+```
+
+## Converting Lyrics to Corpus and Inspecting Song
+
+```{r}
+corpus <- Corpus(VectorSource(data$Lyrics))
+
+corpus[[52]][1]
+```
+
+## Convert text to lower case
+
+```{r, echo=FALSE}
+corpus <- tm_map(corpus, FUN = content_transformer(tolower))
+
+corpus[[240]][1]
+```
+
+## Remove Punctuation
+
+```{r, echo=FALSE}
+
+corpus <- tm_map(corpus,FUN = removePunctuation)
+
+corpus[[52]][1]
+```
+
+## Remove \n where computer is denoting new line
+
+```{r}
+
+corpus = tm_map(corpus,
+                FUN = content_transformer(FUN = function(x)gsub(pattern = '\n',
+                                                                replacement = ' ',x = x)))
+
+corpus[[52]][1]
+```
+
+## Remove Stop Words
+
+```{r}
+
+corpus <- tm_map(corpus, FUN = removeWords,c(stopwords('english')))
+
+corpus[[52]][1]
+
+```
+
+# Remove Stop Words in Spanish
+
+```{r}
+
+corpus <- tm_map(corpus, FUN = removeWords,c(stopwords('spanish')))
+
+corpus[[3]][1]
+
+```
+
+# Strip White Space
+
+```{r}
+
+corpus <- tm_map(corpus,FUN = stripWhitespace)
+
+corpus[[52]][1]
+
+```
+
+# Stem Words
+
+```{r}
+corpus <- tm_map(corpus,FUN = stemDocument)
+
+corpus[[52]][1]
+```
+
+# Add Cleaned Corpus to Original Data Set
+
+```{r}
+
+data$CleanText <- get("content", corpus)
+
+str(data)
+
+```
+
+# Create Cleaned CSV
+
+```{r}
+
+creationFile = data.frame(ID = data$ID, Position = data$Position, Title = data$Title, Artist = data$Artist, Year = data$Year, Streams = data$Streams, Lyrics = data$Lyrics, CleanText = data$CleanText)
+
+write.csv(creationFile,'Spotify_Master_US_Data_Cleaned.csv', row.names=FALSE)
+
+```
+
+# Preliminary Exploring - Create Dictionary
+
+```{r}
+
+dict = findFreqTerms(DocumentTermMatrix(Corpus(VectorSource(data$Lyrics))),
+                     lowfreq = 0)
+dict_corpus = Corpus(VectorSource(dict))
+```
+
+# Create Document Term Matrix and Inspect
+
+```{r}
+
+dtm <- DocumentTermMatrix(corpus)
+
+inspect(dtm[52,"ever"])
+
+```
+
+# Remove Sparse Terms and Complete Stems
+
+```{r}
+
+xdtm = removeSparseTerms(dtm,sparse = 0.95)
+
+xdtm = as.data.frame(as.matrix(xdtm))
+colnames(xdtm) = stemCompletion(x = colnames(xdtm),
+                                dictionary = dict_corpus,
+                                type='prevalent')
+colnames(xdtm) = make.names(colnames(xdtm))
+
+```
+
+# Review Frequency of Tokens
+
+```{r}
+
+sort(colSums(xdtm),decreasing = T)
+
+```
+
